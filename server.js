@@ -1,53 +1,39 @@
-// server.js
-const express = require("express");
-const cors = require("cors");
-require("dotenv").config();
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
-
-app.use(cors({
-  origin: process.env.ALLOWED_ORIGIN, // e.g., https://your-wordpress-site.com
-  methods: ["POST"]
-}));
-
+app.use(cors());
 app.use(express.json());
 
-// Health check
-app.get("/health", (_req, res) => res.json({ ok: true }));
-
-// Ephemeral token route
-app.post("/api/openai/ephemeral", async (_req, res) => {
+app.post("/api/openai/ephemeral", async (req, res) => {
   try {
-    const model = "gpt-4o-realtime-preview"; // verify current realtime model name in docs
+    const tokenResponse = await fetch(
+      "https://api.openai.com/v1/realtime/sessions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-realtime-preview",
+          modalities: ["audio", "text"]
+        })
+      }
+    );
 
-    const r = await fetch("https://api.openai.com/v1/realtime/sessions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        instructions: "You are my website voice assistant. Be concise and friendly.",
-        modalities: ["audio", "text"],
-        voice: "verse"
-      })
-    });
-
-    if (!r.ok) {
-      const errText = await r.text();
-      return res.status(r.status).json({ error: errText });
-    }
-
-    const data = await r.json(); // includes client_secret.value (ephemeral token)
-    res.json(data);
+    const json = await tokenResponse.json();
+    return res.json(json);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error minting ephemeral token" });
   }
 });
 
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`Ephemeral service running on http://localhost:${port}`);
+// Render uses its own PORT
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
